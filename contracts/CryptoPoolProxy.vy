@@ -64,8 +64,7 @@ future_ownership_admin: public(address)
 future_parameter_admin: public(address)
 future_emergency_admin: public(address)
 
-burners: public(HashMap[ERC20, Burner])  # empty(address) is default
-burner_kill: public(bool)
+burner: public(Burner)
 
 # pool -> caller -> can call `donate_admin_fees`
 donate_approval: public(HashMap[Curve, HashMap[address, bool]])
@@ -122,47 +121,14 @@ def apply_set_admins():
     log ApplyAdmins(_o_admin, _p_admin, _e_admin)
 
 
-@internal
-def _set_burner(_coin: ERC20, _burner: Burner):
-    if _coin.address not in [empty(address), ETH_ADDRESS]:
-        old_burner: Burner = self.burners[_coin]
-        if old_burner != empty(Burner):
-            # revoke approval on previous burner
-            assert _coin.approve(old_burner.address, 0, default_return_value=True)
-
-    self.burners[_coin] = _burner
-
-    log SetBurner(_coin, _burner)
-
-
 @external
 @nonreentrant('lock')
-def set_burner(_coin: ERC20, _burner: Burner):
+def set_burner(_burner: Burner):
     """
-    @notice Set burner of `_coin` to `_burner` address
-    @param _coin Token address
     @param _burner Burner contract address
     """
     assert msg.sender == self.ownership_admin, "Access denied"
-
-    self._set_burner(_coin, _burner)
-
-
-@external
-@nonreentrant('lock')
-def set_many_burners(_coins: ERC20[20], _burners: Burner[20]):
-    """
-    @notice Set burner of `_coin` to `_burner` address
-    @param _coins Token address
-    @param _burners Burner contract address
-    """
-    assert msg.sender == self.ownership_admin, "Access denied"
-
-    for i in range(20):
-        coin: ERC20 = _coins[i]
-        if coin == empty(ERC20):
-            break
-        self._set_burner(coin, _burners[i])
+    self.burner = _burner
 
 
 @external
@@ -190,9 +156,7 @@ def withdraw_many(_pools: Curve[20]):
 
 @internal
 def _burn(_coin: ERC20):
-    burner: Burner = self.burners[_coin]
-    if burner == empty(Burner):  # use default
-        burner = self.burners[empty(ERC20)]
+    burner: Burner = self.burner
     value: uint256 = 0
     if _coin.address == ETH_ADDRESS:
         value = self.balance
@@ -209,8 +173,6 @@ def burn(_coin: ERC20):
     @notice Burn accrued `_coin` via a preset burner
     @param _coin Coin address
     """
-    assert not self.burner_kill
-
     self._burn(_coin)
 
 
@@ -221,12 +183,9 @@ def burn_many(_coins: ERC20[20]):
     @notice Burn accrued admin fees from multiple coins
     @param _coins List of coin addresses
     """
-    assert not self.burner_kill
-
     for coin in _coins:
         if coin == empty(ERC20):
             break
-
         self._burn(coin)
 
 
@@ -250,16 +209,6 @@ def unkill_me(_pool: address):
     """
     assert msg.sender == self.emergency_admin or msg.sender == self.ownership_admin, "Access denied"
     Curve(_pool).unkill_me()
-
-
-@external
-def set_burner_kill(_is_killed: bool):
-    """
-    @notice Kill or unkill `burn` functionality
-    @param _is_killed Burner kill status
-    """
-    assert msg.sender == self.emergency_admin or msg.sender == self.ownership_admin, "Access denied"
-    self.burner_kill = _is_killed
 
 
 @external
