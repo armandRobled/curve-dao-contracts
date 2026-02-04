@@ -224,7 +224,7 @@ pluggy==1.0.0
     #   pytest
 prompt-toolkit==3.0.23
     # via eth-brownie
-protobuf==3.19.1
+protobuf==6.33.5
     # via
     #   eth-brownie
     #   web3
